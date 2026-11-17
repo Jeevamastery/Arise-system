@@ -1,0 +1,58 @@
+name: Build Solo Leveling System APK
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  workflow_dispatch:
+
+jobs:
+  build-android-apk:
+    name: Compile Standalone Android APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Set up Java JDK 21 (Required for Capacitor & Gradle)
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Install Web & Capacitor Dependencies
+        run: npm install
+
+      - name: Build Production React Bundle
+        run: npm run build
+
+      - name: Initialize & Sync Capacitor Android Platform
+        run: |
+          if [ ! -d "android" ]; then
+            npx cap add android
+          fi
+          npx cap sync android
+
+      - name: Inject Camera, Sensor & Vibrate Permissions into AndroidManifest.xml
+        run: |
+          MANIFEST="android/app/src/main/AndroidManifest.xml"
+          if ! grep -q "android.permission.CAMERA" "$MANIFEST"; then
+            sed -i 's|<application|<uses-permission android:name="android.permission.CAMERA" />\n    <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />\n    <uses-permission android:name="android.permission.VIBRATE" />\n    <uses-feature android:name="android.hardware.camera" android:required="false" />\n    <application|' "$MANIFEST"
+          fi
+
+      - name: Grant Execute Permission to Gradlew & Compile APK
+        working-directory: ./android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug
+
+      - name: Upload Compiled Solo-Leveling-System.apk Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Solo-Leveling-System-APK
+          path: android/app/build/outputs/apk/debug/app-debug.apk
